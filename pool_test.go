@@ -2,6 +2,9 @@ package mysqlpool
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -30,14 +33,44 @@ func newMySQLConfig(t *testing.T) *mysql.Config {
 }
 
 func TestPool(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := newMySQLConfig(t)
 	p := &Pool{
 		MySQLConfig: cfg,
 		DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
 	}
-	db, err := p.Get(context.Background())
+
+	// get the database from the pool
+	db, err := p.Get(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer p.Put(db)
+
+	// get the database name
+	var dbName string
+	row := db.QueryRow("SELECT DATABASE()")
+	if err := row.Scan(&dbName); err != nil {
+		t.Error(err)
+	}
+	p.Put(db)
+
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// check if the database is dropped
+	conn, err := mysql.NewConnector(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db = sql.OpenDB(conn)
+	defer db.Close()
+
+	row = db.QueryRowContext(ctx, fmt.Sprintf("SHOW DATABASES LIKE '%s'", dbName))
+	err = row.Scan(&dbName)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("expected database to be dropped; got %v", err)
+	}
 }
