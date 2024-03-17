@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -42,14 +43,28 @@ func (p *Pool) Put(db *sql.DB) {
 }
 
 func (p *Pool) Close() error {
+	var errs []error
+
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for _, db := range p.freeDB {
-		db.Close()
+		if err := p.dropDB(context.Background(), db); err != nil {
+			errs = append(errs, err)
+		}
+		if err := db.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if p.adminDB != nil {
-		p.adminDB.Close()
+		if err := p.adminDB.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	p.mu.Unlock()
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }
 
@@ -107,6 +122,18 @@ func (p *Pool) initDB(ctx context.Context, dbName string) error {
 	// Execute the DDL.
 	_, err = db.ExecContext(ctx, p.DDL)
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Pool) dropDB(ctx context.Context, db *sql.DB) error {
+	row := db.QueryRowContext(ctx, "SELECT DATABASE()")
+	var dbName string
+	if err := row.Scan(&dbName); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, "DROP DATABASE `"+dbName+"`"); err != nil {
 		return err
 	}
 	return nil
