@@ -26,7 +26,7 @@ jobs:
 
       - name: Run tests
         run: |
-          go test -v -coverprofile=profile.cov ./...
+          go test -v -coverprofile=coverage.txt ./...
         env:
           MYSQLPOOL_USER: root
           MYSQLPOOL_PASS: verysecret
