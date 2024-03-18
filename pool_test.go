@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
@@ -105,6 +106,7 @@ func TestPool_ResetTables(t *testing.T) {
 	}
 	p.Put(db)
 
+	// get the same database from the pool
 	db, err = p.Get(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -121,5 +123,77 @@ func TestPool_ResetTables(t *testing.T) {
 
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPool_GetParallel(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := newMySQLConfig(t)
+	p := &Pool{
+		MySQLConfig: cfg,
+		DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
+	}
+
+	const num = 10
+	ch := make(chan *sql.DB, num)
+	var wg sync.WaitGroup
+	wg.Add(num)
+	for i := 0; i < num; i++ {
+		go func() {
+			defer wg.Done()
+			// get the database from the pool
+			db, err := p.Get(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+			ch <- db
+		}()
+	}
+	wg.Wait()
+	close(ch)
+
+	// collect the database names
+	names := make(map[string]struct{})
+	dbs := make([]*sql.DB, 0, num)
+	for db := range ch {
+		dbs = append(dbs, db)
+
+		// get the database name
+		var dbName string
+		row := db.QueryRow("SELECT DATABASE()")
+		if err := row.Scan(&dbName); err != nil {
+			t.Error(err)
+		}
+		if _, ok := names[dbName]; ok {
+			t.Errorf("expected unique database names; got %s", dbName)
+		}
+		names[dbName] = struct{}{}
+	}
+
+	for _, db := range dbs {
+		p.Put(db)
+	}
+
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// check if the database is dropped
+	conn, err := mysql.NewConnector(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := sql.OpenDB(conn)
+	defer db.Close()
+	for dbName := range names {
+		row := db.QueryRowContext(ctx, fmt.Sprintf("SHOW DATABASES LIKE '%s'", dbName))
+		err = row.Scan(&dbName)
+		if !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("expected database to be dropped; got %v", err)
+		}
 	}
 }
