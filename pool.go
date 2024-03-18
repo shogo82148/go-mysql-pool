@@ -11,6 +11,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+var ErrClosed = errors.New("mysqlpool: pool is closed")
+
 type Pool struct {
 	// MySQLConfig is the configuration for the MySQL connection.
 	MySQLConfig *mysql.Config
@@ -19,12 +21,18 @@ type Pool struct {
 	DDL string
 
 	mu      sync.Mutex
+	closed  bool
 	adminDB *sql.DB
 	freeDB  []*sql.DB
+	allDB   []*sql.DB
 }
 
 func (p *Pool) Get(ctx context.Context) (*sql.DB, error) {
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return nil, ErrClosed
+	}
 	if len(p.freeDB) > 0 {
 		l := len(p.freeDB)
 		db := p.freeDB[l-1]
@@ -36,13 +44,24 @@ func (p *Pool) Get(ctx context.Context) (*sql.DB, error) {
 		return db, nil
 	}
 	p.mu.Unlock()
-	return p.new(ctx)
+
+	db, err := p.new(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	p.allDB = append(p.allDB, db)
+	p.mu.Unlock()
+	return db, nil
 }
 
 func (p *Pool) Put(db *sql.DB) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return
+	}
 	p.freeDB = append(p.freeDB, db)
-	p.mu.Unlock()
 }
 
 func (p *Pool) Close() error {
@@ -50,9 +69,13 @@ func (p *Pool) Close() error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	p.closed = true
 
 	ctx := context.Background()
-	for _, db := range p.freeDB {
+	for _, db := range p.allDB {
 		if err := dropDB(ctx, db); err != nil {
 			errs = append(errs, err)
 		}
