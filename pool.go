@@ -30,6 +30,9 @@ func (p *Pool) Get(ctx context.Context) (*sql.DB, error) {
 		db := p.freeDB[l-1]
 		p.freeDB = p.freeDB[:l-1]
 		p.mu.Unlock()
+		if err := resetDB(ctx, db); err != nil {
+			return nil, err
+		}
 		return db, nil
 	}
 	p.mu.Unlock()
@@ -48,8 +51,9 @@ func (p *Pool) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	ctx := context.Background()
 	for _, db := range p.freeDB {
-		if err := p.dropDB(context.Background(), db); err != nil {
+		if err := dropDB(ctx, db); err != nil {
 			errs = append(errs, err)
 		}
 		if err := db.Close(); err != nil {
@@ -127,7 +131,88 @@ func (p *Pool) initDB(ctx context.Context, dbName string) error {
 	return nil
 }
 
-func (p *Pool) dropDB(ctx context.Context, db *sql.DB) error {
+// resetDB truncates all tables in the database.
+func resetDB(ctx context.Context, db *sql.DB) (err error) {
+	tables, err := listNonEmptyTables(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if _, e := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 1"); e != nil && err == nil {
+			err = e
+		}
+	}()
+
+	for _, table := range tables {
+		if _, err := conn.ExecContext(ctx, "TRUNCATE TABLE `"+table+"`"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func listNonEmptyTables(ctx context.Context, db *sql.DB) (tables []string, err error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// get the current value of information_schema_stats_expiry
+	row := conn.QueryRowContext(ctx, "SELECT @@information_schema_stats_expiry")
+	var expiry int
+	if err := row.Scan(&expiry); err != nil {
+		return nil, err
+	}
+
+	// disable the cache for INFORMATION_SCHEMA TABLES
+	_, err = conn.ExecContext(ctx, "SET information_schema_stats_expiry = 0")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		// restore information_schema_stats_expiry
+		if _, e := conn.ExecContext(ctx, "SET information_schema_stats_expiry = ?", expiry); e != nil && err == nil {
+			err = e
+		}
+	}()
+
+	rows, err := conn.QueryContext(
+		ctx,
+		"SELECT `table_name` FROM `information_schema`.`tables` "+
+			"WHERE `table_schema` = DATABASE() AND ("+
+			"  `table_rows` > 0 OR `auto_increment` > 1"+
+			")",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			return nil, err
+		}
+		tables = append(tables, table)
+	}
+
+	return tables, nil
+}
+
+func dropDB(ctx context.Context, db *sql.DB) error {
 	row := db.QueryRowContext(ctx, "SELECT DATABASE()")
 	var dbName string
 	if err := row.Scan(&dbName); err != nil {

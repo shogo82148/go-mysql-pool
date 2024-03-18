@@ -32,7 +32,9 @@ func newMySQLConfig(t *testing.T) *mysql.Config {
 	return cfg
 }
 
-func TestPool(t *testing.T) {
+func TestPool_CleanupDB(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -72,5 +74,52 @@ func TestPool(t *testing.T) {
 	err = row.Scan(&dbName)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected database to be dropped; got %v", err)
+	}
+}
+
+func TestPool_ResetTables(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := newMySQLConfig(t)
+	p := &Pool{
+		MySQLConfig: cfg,
+		DDL: "CREATE TABLE parent (id INT PRIMARY KEY);" +
+			"CREATE TABLE child (id INT PRIMARY KEY, parent_id INT, FOREIGN KEY (parent_id) REFERENCES parent(id));",
+	}
+
+	// get the database from the pool
+	db, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("INSERT INTO parent (id) VALUES (1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("INSERT INTO child (id, parent_id) VALUES (1, 1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Put(db)
+
+	db, err = p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := db.QueryRow("SELECT COUNT(*) FROM parent")
+	var count int
+	if err := row.Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 rows; got %d", count)
+	}
+	p.Put(db)
+
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
