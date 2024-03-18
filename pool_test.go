@@ -86,7 +86,8 @@ func TestPool_ResetTables(t *testing.T) {
 	cfg := newMySQLConfig(t)
 	p := &Pool{
 		MySQLConfig: cfg,
-		DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
+		DDL: "CREATE TABLE parent (id INT PRIMARY KEY);" +
+			"CREATE TABLE child (id INT PRIMARY KEY, parent_id INT, FOREIGN KEY (parent_id) REFERENCES parent(id));",
 	}
 
 	// get the database from the pool
@@ -94,7 +95,11 @@ func TestPool_ResetTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.Exec("INSERT INTO foo (id) VALUES (1)")
+	_, err = db.Exec("INSERT INTO parent (id) VALUES (1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("INSERT INTO child (id, parent_id) VALUES (1, 1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +109,7 @@ func TestPool_ResetTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	row := db.QueryRow("SELECT COUNT(*) FROM foo")
+	row := db.QueryRow("SELECT COUNT(*) FROM parent")
 	var count int
 	if err := row.Scan(&count); err != nil {
 		t.Fatal(err)
