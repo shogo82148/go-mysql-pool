@@ -78,6 +78,54 @@ func TestPool_CleanupDB(t *testing.T) {
 	}
 }
 
+func TestPool_CleanupDB2(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := newMySQLConfig(t)
+	p := &Pool{
+		MySQLConfig: cfg,
+		DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
+	}
+
+	// get the database from the pool
+	db, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get the database name
+	var dbName string
+	row := db.QueryRow("SELECT DATABASE()")
+	if err := row.Scan(&dbName); err != nil {
+		t.Error(err)
+	}
+
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Put after Close
+	// this is no op
+	p.Put(db)
+
+	// check if the database is dropped
+	conn, err := mysql.NewConnector(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db = sql.OpenDB(conn)
+	defer db.Close()
+
+	row = db.QueryRowContext(ctx, fmt.Sprintf("SHOW DATABASES LIKE '%s'", dbName))
+	err = row.Scan(&dbName)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("expected database to be dropped; got %v", err)
+	}
+}
+
 func TestPool_ResetTables(t *testing.T) {
 	t.Parallel()
 
