@@ -132,7 +132,7 @@ func (p *Pool) initDB(ctx context.Context, dbName string) error {
 }
 
 // resetDB truncates all tables in the database.
-func resetDB(ctx context.Context, db *sql.DB) error {
+func resetDB(ctx context.Context, db *sql.DB) (err error) {
 	tables, err := listNonEmptyTables(ctx, db)
 	if err != nil {
 		return err
@@ -142,10 +142,17 @@ func resetDB(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
+
 	_, err = conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 0")
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if _, e := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 1"); e != nil && err == nil {
+			err = e
+		}
+	}()
 
 	for _, table := range tables {
 		if _, err := conn.ExecContext(ctx, "TRUNCATE TABLE `"+table+"`"); err != nil {
@@ -153,18 +160,15 @@ func resetDB(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
-	_, err = conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 1")
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-func listNonEmptyTables(ctx context.Context, db *sql.DB) ([]string, error) {
+func listNonEmptyTables(ctx context.Context, db *sql.DB) (tables []string, err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 
 	// get the current value of information_schema_stats_expiry
 	row := conn.QueryRowContext(ctx, "SELECT @@information_schema_stats_expiry")
@@ -178,8 +182,13 @@ func listNonEmptyTables(ctx context.Context, db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		// restore information_schema_stats_expiry
+		if _, e := conn.ExecContext(ctx, "SET information_schema_stats_expiry = ?", expiry); e != nil && err == nil {
+			err = e
+		}
+	}()
 
-	var tables []string
 	rows, err := conn.QueryContext(
 		ctx,
 		"SELECT `table_name` FROM `information_schema`.`tables` "+
@@ -198,16 +207,6 @@ func listNonEmptyTables(ctx context.Context, db *sql.DB) ([]string, error) {
 			return nil, err
 		}
 		tables = append(tables, table)
-	}
-
-	// restore information_schema_stats_expiry
-	_, err = conn.ExecContext(ctx, "SET information_schema_stats_expiry = ?", expiry)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := conn.Close(); err != nil {
-		return nil, err
 	}
 
 	return tables, nil
