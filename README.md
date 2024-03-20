@@ -11,6 +11,7 @@ Go-MySQL-Pool is a package that simplifies the creation and management of MySQL 
 package example_test
 
 import (
+    "context"
     "testing"
 
     "github.com/go-sql-driver/mysql"
@@ -30,7 +31,7 @@ func TestMain(m *testing.M) {
         MySQLConfig: cfg,
         DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
     }
-    defer p.Close() // cleanup all databases
+    defer pool.Close() // cleanup all databases
 
     m.Run()
 }
@@ -42,7 +43,7 @@ func TestFooBar(t *testing.T) {
         t.Fatal(err)
     }
     t.Cleanup(func() {
-        p.Put(db)
+        pool.Put(db)
     })
 
     // use db for testing.
