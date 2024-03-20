@@ -3,7 +3,7 @@
 
 # go-mysql-pool
 
-create MySQL database for testing.
+Go-MySQL-Pool is a package that simplifies the creation and management of MySQL database pools for testing and development purposes.
 
 ## Synopsis
 
