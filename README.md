@@ -49,3 +49,7 @@ func TestFooBar(t *testing.T) {
     // use db for testing.
 }
 ```
+
+## Reference
+
+- [Go で MySQL を使ったテストを書くときにつかうユーティリティーライブラリを作った](https://shogo82148.github.io/blog/2024/03/20/2024-03-20-go-mysql-pool/)
