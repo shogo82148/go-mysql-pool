@@ -1,1 +1,50 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/shogo82148/go-mysql-pool.svg)](https://pkg.go.dev/github.com/shogo82148/go-mysql-pool)
+[![test](https://github.com/shogo82148/go-mysql-pool/actions/workflows/test.yaml/badge.svg)](https://github.com/shogo82148/go-mysql-pool/actions/workflows/test.yaml)
+
 # go-mysql-pool
+
+create MySQL database for testing.
+
+## Synopsis
+
+```go
+package example_test
+
+import (
+    "testing"
+
+    "github.com/go-sql-driver/mysql"
+    "github.com/shogo82148/go-mysql-pool"
+)
+
+var pool *mysqlpool.Pool
+
+func TestMain(m *testing.M) {
+    // setup the pool
+    cfg := mysql.NewConfig()
+    cfg.User = "username"
+    cfg.Passwd = "password"
+    cfg.Net = "tcp"
+    cfg.Addr = "127.0.0.1:3306"
+    pool = &mysqlpool.Pool{
+        MySQLConfig: cfg,
+        DDL:         "CREATE TABLE foo (id INT PRIMARY KEY)",
+    }
+    defer p.Close() // cleanup all databases
+
+    m.Run()
+}
+
+func TestFooBar(t *testing.T) {
+    // get *sql.DB from the pool.
+    db, err := pool.Get(context.Background())
+    if err != nil {
+        t.Fatal(err)
+    }
+    t.Cleanup(func() {
+        p.Put(db)
+    })
+
+    // use db for testing.
+}
+```
