@@ -1,3 +1,4 @@
+// Package mysqlpool simplifies the creation and management of MySQL database pools for testing and development purposes.
 package mysqlpool
 
 import (
@@ -11,8 +12,10 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+// ErrClosed is returned when the pool is closed.
 var ErrClosed = errors.New("mysqlpool: pool is closed")
 
+// Pool is a pool of MySQL databases.
 type Pool struct {
 	// MySQLConfig is the configuration for the MySQL connection.
 	MySQLConfig *mysql.Config
@@ -27,6 +30,7 @@ type Pool struct {
 	allDB   []*sql.DB
 }
 
+// Get returns a database from the pool. If the pool is empty, a new database is created.
 func (p *Pool) Get(ctx context.Context) (*sql.DB, error) {
 	p.mu.Lock()
 	if p.closed {
@@ -55,6 +59,7 @@ func (p *Pool) Get(ctx context.Context) (*sql.DB, error) {
 	return db, nil
 }
 
+// Put returns a database to the pool.
 func (p *Pool) Put(db *sql.DB) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -64,6 +69,7 @@ func (p *Pool) Put(db *sql.DB) {
 	p.freeDB = append(p.freeDB, db)
 }
 
+// Close drops all databases in the pool and closes all connections.
 func (p *Pool) Close() error {
 	var errs []error
 
