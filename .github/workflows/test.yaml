@@ -34,7 +34,7 @@ jobs:
           MYSQLPOOL_PORT: 3306
 
       - name: Send coverage to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: GO
