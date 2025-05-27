@@ -254,7 +254,7 @@ func dropDB(ctx context.Context, db *sql.DB) error {
 }
 
 func (p *Pool) getAdminDB() (*sql.DB, error) {
-	// If adminDD is already created, return it.
+	// If adminDB is already created, return it.
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.adminDB != nil {
