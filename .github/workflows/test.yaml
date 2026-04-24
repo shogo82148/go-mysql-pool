@@ -22,7 +22,7 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: setup MySQL
-        uses: shogo82148/actions-setup-mysql@840178c12b07a58353c6312be784c23b63756eea # v1.49.0
+        uses: shogo82148/actions-setup-mysql@9c42ca180d5f1dd4dceb54c23c5eda0384f4d265 # v1.50.0
         with:
           mysql-version: "8.0"
           root-password: verysecret
