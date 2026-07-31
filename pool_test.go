@@ -1,7 +1,6 @@
 package mysqlpool
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -36,8 +35,7 @@ func newMySQLConfig(t *testing.T) *mysql.Config {
 func TestPool_CleanupDB(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cfg := newMySQLConfig(t)
 	p := &Pool{
@@ -81,8 +79,7 @@ func TestPool_CleanupDB(t *testing.T) {
 func TestPool_CleanupDB2(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cfg := newMySQLConfig(t)
 	p := &Pool{
@@ -129,8 +126,7 @@ func TestPool_CleanupDB2(t *testing.T) {
 func TestPool_ResetTables(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cfg := newMySQLConfig(t)
 	p := &Pool{
@@ -177,8 +173,7 @@ func TestPool_ResetTables(t *testing.T) {
 func TestPool_GetParallel(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cfg := newMySQLConfig(t)
 	p := &Pool{
@@ -189,8 +184,8 @@ func TestPool_GetParallel(t *testing.T) {
 	const num = 10
 	ch := make(chan *sql.DB, num)
 	var wg sync.WaitGroup
-	wg.Add(num)
-	for i := 0; i < num; i++ {
+	for range num {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			// get the database from the pool
