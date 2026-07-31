@@ -32,6 +32,28 @@ func newMySQLConfig(t *testing.T) *mysql.Config {
 	return cfg
 }
 
+func TestPool_EmptyDDL(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	cfg := newMySQLConfig(t)
+	p := &Pool{
+		MySQLConfig: cfg,
+	}
+
+	// get the database from the pool
+	db, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Put(db)
+
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPool_CleanupDB(t *testing.T) {
 	t.Parallel()
 

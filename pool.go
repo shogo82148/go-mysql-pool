@@ -20,7 +20,8 @@ type Pool struct {
 	// MySQLConfig is the configuration for the MySQL connection.
 	MySQLConfig *mysql.Config
 
-	// DDL is Data Definition.
+	// DDL is Data Definition Language statements to initialize the database.
+	// If DDL is empty, the database will not be initialized.
 	DDL string
 
 	mu      sync.Mutex
@@ -141,6 +142,11 @@ func (p *Pool) createDB(ctx context.Context) (string, error) {
 }
 
 func (p *Pool) initDB(ctx context.Context, dbName string) error {
+	if p.DDL == "" {
+		// If DDL is empty, do nothing.
+		return nil
+	}
+
 	// Open a new connection to the database.
 	cfg := p.MySQLConfig.Clone()
 	cfg.DBName = dbName
