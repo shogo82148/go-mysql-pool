@@ -35,8 +35,7 @@ func newMySQLConfig(t *testing.T) *mysql.Config {
 func TestPool_EmptyDDL(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cfg := newMySQLConfig(t)
 	p := &Pool{
