@@ -20,14 +20,14 @@ jobs:
           - "8.4" # LTS
           - "8.0"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version: ${{ matrix.go }}
 
       - name: setup MySQL
-        uses: shogo82148/actions-setup-mysql@fb8ae72ad9f2f8244e594d6d48a981e975aee78e # v1.56.1
+        uses: shogo82148/actions-setup-mysql@v1.56.1
         with:
           mysql-version: ${{ matrix.mysql }}
           root-password: verysecret
@@ -42,7 +42,7 @@ jobs:
           MYSQLPOOL_PORT: 3306
 
       - name: Send coverage to codecov.io
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: GO
